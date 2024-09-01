@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Workflow Builder</title>
+    <script src="https://unpkg.com/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        #workflow-builder {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        #toolbar {
+            padding: 10px;
+            background-color: #3b3b3b;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #canvas-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+        }
+
+        #canvas {
+            width: 1000px;
+            height: 1000px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+        }
+
+        .node {
+            width: 150px;
+            height: 50px;
+            background-color: #4285f4;
+            color: #fff;
+            text-align: center;
+            line-height: 50px;
+            border-radius: 4px;
+            position: absolute;
+            cursor: pointer;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .node.selected {
+            border: 2px solid #ff9800;
+        }
+
+        .node span {
+            pointer-events: none;
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 12px;
+            line-height: 20px;
+        }
+
+        .remove-btn:hover {
+            background-color: darkred;
+        }
+
+        #add-node {
+            background-color: #34a853;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+
+        #add-node:disabled {
+            background-color: #9e9e9e;
+            cursor: not-allowed;
+        }
+
+        #add-node:hover:enabled {
+            background-color: #2a8c43;
+        }
+
+        #add-project {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+
+        #add-project:hover {
+            background-color: #3367d6;
+        }
+
+        #edit-project {
+            background-color: #f4b400;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+
+        #edit-project:hover {
+            background-color: #c99b00;
+        }
+
+        #refresh-project {
+            background-color: #00bcd4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+
+        #refresh-project:hover {
+            background-color: #008ba3;
+        }
+
+        #project-select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            padding-top: 100px;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0, 0, 0);
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 10px;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .modal input[type="text"], .modal textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+        }
+
+        .modal button {
+            background-color: #34a853;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        .modal button:hover {
+            background-color: #2a8c43;
+        }
+
+        #miniview-container {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            width: 200px;
+            height: 200px;
+            border: 2px solid #999;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 2;
+        }
+
+        #miniview {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+
+        #miniview-canvas {
+            width: 1000px;
+            height: 1000px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+            transform: scale(0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="workflow-builder">
+        <div id="toolbar">
+            <button id="add-project">Proyecto</button>
+            <select id="project-select"></select>
+            <button id="edit-project">Editar</button>
+            <button id="refresh-project">Refresh</button>
+            <button id="add-node" disabled>Agregar Nodo</button>
+        </div>
+        <div id="canvas-container">
+            <div id="canvas"></div>
+            <div id="miniview-container">
+                <div id="miniview">
+                    <div id="miniview-canvas"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Nuevo Proyecto</h2>
+            <input type="text" id="projectName" placeholder="Nombre del Proyecto">
+            <textarea id="projectDescription" placeholder="Descripción del Proyecto"></textarea>
+            <button id="saveProject">Guardar Proyecto</button>
+        </div>
+    </div>
+
+    <div id="editProjectModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Editar Proyecto</h2>
+            <input type="text" id="editProjectName" placeholder="Nombre del Proyecto">
+            <textarea id="editProjectDescription" placeholder="Descripción del Proyecto"></textarea>
+            <button id="saveEditProject">Guardar Cambios</button>
+        </div>
+    </div>
+
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Editar Nodo</h2>
+            <input type="text" id="nodeName" placeholder="Nombre del nodo">
+            <input type="number" id="nodeSize" placeholder="Tamaño del nodo">
+            <button id="saveChanges">Guardar Cambios</button>
+        </div>
+    </div>
+
+    <script>
+        let currentProjectId = null;
+
+        document.addEventListener("DOMContentLoaded", function () {
+            jsPlumb.ready(function () {
+                var instance = jsPlumb.getInstance({
+                    Container: "canvas",
+                    Connector: ["Bezier", { curviness: 50 }],
+                    PaintStyle: { strokeWidth: 2, stroke: "#5c96bc" },
+                    EndpointStyle: { width: 7, height: 7, stroke: "#5c96bc" },
+                    Endpoint: "Dot",
+                    Anchors: ["Top", "Bottom", "Left", "Right"],
+                    ConnectionOverlays: [
+                        ["Arrow", { location: 1, id: "arrow", width: 10, length: 10, foldback: 0.8 }],
+                        ["Label", { label: "", id: "label", cssClass: "aLabel" }]
+                    ]
+                });
+
+                var canvasContainer = document.getElementById("canvas-container");
+                var modal = document.getElementById("editModal");
+                var projectModal = document.getElementById("projectModal");
+                var editProjectModal = document.getElementById("editProjectModal");
+                var closeModalBtn = document.getElementsByClassName("close");
+                var saveChangesBtn = document.getElementById("saveChanges");
+                var saveProjectBtn = document.getElementById("saveProject");
+                var saveEditProjectBtn = document.getElementById("saveEditProject");
+                var refreshProjectBtn = document.getElementById("refresh-project");
+                var currentNode;
+
+                let panning = false;
+                let scale = 1;
+                let start = { x: 0, y: 0 };
+                let translate = { x: 0, y: 0 };
+
+                // Cerrar modales al hacer clic en el botón de cerrar
+                for (let i = 0; i < closeModalBtn.length; i++) {
+                    closeModalBtn[i].onclick = function () {
+                        modal.style.display = "none";
+                        projectModal.style.display = "none";
+                        editProjectModal.style.display = "none";
+                    }
+                }
+
+                // Cerrar modales al hacer clic fuera de ellos
+                window.onclick = function (event) {
+                    if (event.target == modal || event.target == projectModal || event.target == editProjectModal) {
+                        modal.style.display = "none";
+                        projectModal.style.display = "none";
+                        editProjectModal.style.display = "none";
+                    }
+                }
+
+                // Guardar cambios en un nodo
+                saveChangesBtn.onclick = function () {
+                    var nodeName = document.getElementById("nodeName").value;
+                    var nodeSize = document.getElementById("nodeSize").value;
+
+                    if (nodeName && currentNode) {
+                        currentNode.querySelector("span").innerText = nodeName;
+
+                        var posX = parseInt(currentNode.style.left) || 0;
+                        var posY = parseInt(currentNode.style.top) || 0;
+                        updateNodeInDatabase(currentNode.id, nodeName, posX, posY);
+                    }
+
+                    if (nodeSize && currentNode) {
+                        currentNode.style.width = nodeSize + "px";
+                        currentNode.style.height = nodeSize / 3 + "px";
+                    }
+
+                    modal.style.display = "none";
+                }
+
+                // Guardar un nuevo proyecto
+                saveProjectBtn.onclick = function () {
+                    var projectName = document.getElementById("projectName").value;
+                    var projectDescription = document.getElementById("projectDescription").value;
+
+                    if (projectName && projectDescription) {
+                        saveProjectToDatabase(projectName, projectDescription);
+                        projectModal.style.display = "none";
+                    }
+                }
+
+                // Editar un proyecto existente
+                saveEditProjectBtn.onclick = function () {
+                    var editProjectName = document.getElementById("editProjectName").value;
+                    var editProjectDescription = document.getElementById("editProjectDescription").value;
+
+                    if (currentProjectId && editProjectName && editProjectDescription) {
+                        updateProjectInDatabase(currentProjectId, editProjectName, editProjectDescription);
+                        editProjectModal.style.display = "none";
+                        loadProjects();  // Actualizar la lista de proyectos
+                    }
+                }
+
+                // Abrir el modal para crear un nuevo proyecto
+                document.getElementById("add-project").addEventListener("click", function () {
+                    projectModal.style.display = "block";
+                });
+
+                // Abrir el modal para editar un proyecto existente
+                document.getElementById("edit-project").addEventListener("click", function () {
+                    var selectedOption = document.getElementById("project-select").selectedOptions[0];
+                    if (selectedOption) {
+                        currentProjectId = selectedOption.value;
+                        document.getElementById("editProjectName").value = selectedOption.textContent;
+                        document.getElementById("editProjectDescription").value = ""; // Asume que no se muestra la descripción
+                        editProjectModal.style.display = "block";
+                    }
+                });
+
+                // Botón Refresh para cargar nodos y relaciones
+                refreshProjectBtn.onclick = function () {
+                    var selectedOption = document.getElementById("project-select").selectedOptions[0];
+                    if (selectedOption) {
+                        currentProjectId = selectedOption.value;
+                        loadProjectData(currentProjectId);
+                    }
+                };
+
+                // Cargar proyectos en el selector
+                function loadProjects() {
+                    fetch('/get_projects/')
+                        .then(response => response.json())
+                        .then(data => {
+                            var projectSelect = document.getElementById("project-select");
+                            projectSelect.innerHTML = "";
+                            data.projects.forEach(function (project) {
+                                var option = document.createElement("option");
+                                option.value = project[0];
+                                option.textContent = project[1];
+                                projectSelect.appendChild(option);
+                            });
+
+                            if (data.projects.length > 0) {
+                                projectSelect.disabled = false;
+                                document.getElementById("add-node").disabled = false;
+                            } else {
+                                projectSelect.disabled = true;
+                                document.getElementById("add-node").disabled = true;
+                            }
+                        });
+                }
+
+                // Crear un nodo nuevo
+                document.getElementById("add-node").addEventListener("click", function () {
+                    var newNode = createNode("Nodo " + (document.getElementsByClassName("node").length + 1));
+                    var canvas = document.getElementById("canvas");
+                    var miniviewCanvas = document.getElementById("miniview-canvas");
+
+                    var miniviewRect = document.getElementById("miniview-container").getBoundingClientRect();
+                    var posX, posY;
+
+                    do {
+                        posX = Math.random() * (canvas.clientWidth - 150);
+                        posY = Math.random() * (canvas.clientHeight - 50);
+                    } while (
+                        posX + 150 > miniviewRect.left &&
+                        posX < miniviewRect.right &&
+                        posY + 50 > miniviewRect.top &&
+                        posY < miniviewRect.bottom
+                    );
+
+                    newNode.style.top = posY + "px";
+                    newNode.style.left = posX + "px";
+
+                    var newNodeClone = newNode.cloneNode(true);
+                    newNodeClone.classList.remove('remove-btn');
+                    newNodeClone.removeAttribute("id");
+
+                    canvas.appendChild(newNode);
+                    miniviewCanvas.appendChild(newNodeClone);
+
+                    instance.draggable(newNode, { containment: true });
+
+                    var common = {
+                        endpoint: "Dot",
+                        paintStyle: { fill: "#7AB02C", radius: 5 },
+                        isSource: true,
+                        isTarget: true,
+                        maxConnections: -1,
+                        connectorStyle: { stroke: "#5c96bc", strokeWidth: 2 },
+                        connector: ["Bezier", { curviness: 50 }]
+                    };
+
+                    instance.addEndpoint(newNode, { anchor: "Top" }, common);
+                    instance.addEndpoint(newNode, { anchor: "Bottom" }, common);
+                    instance.addEndpoint(newNode, { anchor: "Left" }, common);
+                    instance.addEndpoint(newNode, { anchor: "Right" }, common);
+
+                    saveNodeToDatabase(newNode.id, newNode.querySelector("span").innerText, posX, posY, currentProjectId);
+                });
+
+                // Función para crear un nodo
+                function createNode(label = "Nodo", posX = null, posY = null) {
+                    var d = document.createElement("div");
+                    d.className = "node";
+                    d.id = "node" + (new Date().getTime());
+                    d.innerHTML = `<span>${label}</span><div class='remove-btn'>&times;</div>`;
+
+                    if (posX !== null && posY !== null) {
+                        d.style.left = posX + "px";
+                        d.style.top = posY + "px";
+                    }
+
+                    var removeButton = d.querySelector(".remove-btn");
+                    removeButton.addEventListener("click", function () {
+                        instance.remove(d);
+                    });
+
+                    d.addEventListener("dblclick", function (event) {
+                        currentNode = d;
+                        document.getElementById("nodeName").value = currentNode.querySelector("span").innerText;
+                        document.getElementById("nodeSize").value = parseInt(currentNode.style.width);
+                        modal.style.display = "block";
+                        event.stopPropagation();
+                    });
+
+                    return d;
+                }
+
+                // Función para guardar un nodo en la base de datos
+                function saveNodeToDatabase(node_id, label, posX, posY, project_id) {
+                    fetch('/save_node/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            node_id: node_id,
+                            label: label,
+                            posX: posX,
+                            posY: posY,
+                            project_id: project_id
+                        })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(data => { throw new Error(data.detail); });
+                        }
+                        return response.json();
+                    })
+                    .then(data => console.log(data))
+                    .catch(error => console.error('Error:', error));
+                }
+
+                // Función para actualizar un nodo en la base de datos
+                function updateNodeInDatabase(node_id, label, posX, posY) {
+                    fetch('/update_node/', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            node_id: node_id,
+                            label: label,
+                            posX: posX,
+                            posY: posY
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => console.log(data))
+                    .catch(error => console.error('Error:', error));
+                }
+
+                // Función para guardar un proyecto en la base de datos
+                function saveProjectToDatabase(name, description) {
+                    fetch('/save_project/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            name: name,
+                            description: description
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data);
+                        currentProjectId = data.project_id;
+                        document.getElementById("add-node").disabled = false;
+                        loadProjects();  // Actualizar la lista de proyectos
+                    })
+                    .catch(error => console.error('Error:', error));
+                }
+
+                // Función para actualizar un proyecto en la base de datos
+                function updateProjectInDatabase(project_id, name, description) {
+                    fetch('/update_project/', {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            project_id: project_id,
+                            name: name,
+                            description: description
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => console.log(data))
+                    .catch(error => console.error('Error:', error));
+                }
+
+                // Función para guardar una conexión en la base de datos
+                function saveConnectionToDatabase(source_node, target_node, label) {
+                    fetch('/save_connection/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            source_node: source_node,
+                            target_node: target_node,
+                            label: label,
+                            project_id: currentProjectId  // Asegúrate de incluir el project_id aquí
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => console.log(data))
+                    .catch(error => console.error('Error:', error));
+                }
+
+                // Función para cargar datos de un proyecto
+                function loadProjectData(project_id) {
+                    fetch(`/get_project_data/${project_id}/`)
+                        .then(response => response.json())
+                        .then(data => {
+                            instance.deleteEveryEndpoint();
+                            document.getElementById("canvas").innerHTML = "";
+
+                            console.log("Nodos cargados:", data.nodes);
+                            console.log("Conexiones cargadas:", data.connections);
+
+                            // Añadir nodos al canvas
+                            data.nodes.forEach(node => {
+                                var newNode = createNode(node.label, node.posX, node.posY);
+                                newNode.id = node.node_id; // Mantener el ID original del nodo
+                                document.getElementById("canvas").appendChild(newNode);
+                                instance.draggable(newNode, { containment: true });
+
+                                var common = {
+                                    endpoint: "Dot",
+                                    paintStyle: { fill: "#7AB02C", radius: 5 },
+                                    isSource: true,
+                                    isTarget: true,
+                                    maxConnections: -1,
+                                    connectorStyle: { stroke: "#5c96bc", strokeWidth: 2 },
+                                    connector: ["Bezier", { curviness: 50 }]
+                                };
+
+                                instance.addEndpoint(newNode, { anchor: "Top" }, common);
+                                instance.addEndpoint(newNode, { anchor: "Bottom" }, common);
+                                instance.addEndpoint(newNode, { anchor: "Left" }, common);
+                                instance.addEndpoint(newNode, { anchor: "Right" }, common);
+                            });
+
+                            // Añadir conexiones al canvas
+                            data.connections.forEach(connection => {
+                                instance.connect({
+                                    source: connection.source_node,
+                                    target: connection.target_node,
+                                    overlays: [
+                                        ["Arrow", { location: 1, id: "arrow", width: 10, length: 10, foldback: 0.8 }],
+                                        ["Label", { label: connection.label || "", id: "label", cssClass: "aLabel" }]
+                                    ]
+                                });
+                            });
+                        })
+                        .catch(error => console.error('Error:', error));
+                }
+
+                instance.bind("connection", function (info) {
+                    info.connection.getOverlay("label").setLabel(info.sourceId + " -> " + info.targetId);
+                    saveConnectionToDatabase(info.sourceId, info.targetId, info.connection.getOverlay("label").getLabel());
+                });
+
+                function setTransform() {
+                    canvas.style.transform = `translate(${translate.x}px, ${translate.y}px) scale(${scale})`;
+                    updateMiniview();
+                }
+
+                function updateMiniview() {
+                    const miniviewCanvas = document.getElementById("miniview-canvas");
+                    miniviewCanvas.style.transform = `scale(${0.2 / scale}) translate(${translate.x * -1}px, ${translate.y * -1}px)`;
+                }
+
+                canvasContainer.addEventListener("mousedown", (e) => {
+                    if (e.target !== canvas) return;
+                    panning = true;
+                    start = { x: e.clientX - translate.x, y: e.clientY - translate.y };
+                });
+
+                canvasContainer.addEventListener("mousemove", (e) => {
+                    if (!panning) return;
+                    translate = {
+                        x: e.clientX - start.x,
+                        y: e.clientY - start.y
+                    };
+                    setTransform();
+                });
+
+                canvasContainer.addEventListener("mouseup", () => {
+                    panning = false;
+                });
+
+                canvasContainer.addEventListener("wheel", (e) => {
+                    e.preventDefault();
+                    const xs = (e.clientX - translate.x) / scale;
+                    const ys = (e.clientY - translate.y) / scale;
+                    const delta = -e.deltaY;
+                    const newScale = delta > 0 ? scale * 1.2 : scale / 1.2;
+                    scale = Math.min(Math.max(0.5, newScale), 5);
+                    translate = {
+                        x: e.clientX - xs * scale,
+                        y: e.clientY - ys * scale
+                    };
+                    setTransform();
+                });
+
+                document.getElementById("miniview").addEventListener("click", function (e) {
+                    const rect = e.target.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    translate = {
+                        x: (x - 100) * -5 * scale,
+                        y: (y - 100) * -5 * scale
+                    };
+                    setTransform();
+                });
+
+                loadProjects();
+            });
+        });
+    </script>
+</body>
+</html>
